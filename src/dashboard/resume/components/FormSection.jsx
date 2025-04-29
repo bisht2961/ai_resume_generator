@@ -13,7 +13,7 @@ import ThemeColor from "./ThemeColor";
 
 function FormSection() {
   const [activeFormIndex, setActiveFormIndex] = useState(1);
-  const [enableNext, setEnableNext] = useState(false);
+  const [enableNext, setEnableNext] = useState(true);
   const {resumeId} = useParams();
   return (
     <div>

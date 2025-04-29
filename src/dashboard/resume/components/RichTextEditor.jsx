@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { ResumeInfoContext } from "@/context/ResumeInfoContext";
 import { Brain, LoaderCircle } from "lucide-react";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   BtnBold,
   BtnBulletList,
@@ -15,42 +14,135 @@ import {
   Separator,
   Toolbar,
 } from "react-simple-wysiwyg";
-import { AIChatSession } from "../../../../services/AIModel";
 import { toast } from "sonner";
+import { useResumeApi } from "../../../hooks/useResumeApi";
+import useExperience from "../../../hooks/useExperience";
+import EditableBulletsModal from "./EditableBulletsModal ";
+import { extractExperienceText } from "../../../utils/utils";
 
-const PROMPT =
-  "position titile: {positionTitle} , Depends on position title give me 5-7 bullet points for my experience to add in my resume (Please do not add experince level and No JSON array) , give me result in HTML tags.";
+const validation_checks = [
+  { field: "title", message: "Please add position title first." },
+  { field: "companyName", message: "Please add company name first." },
+  { field: "startDate", message: "Please add start date first." },
+];
+
+const parseHtmlToBulletPoints = (htmlString) => {
+  const container = document.createElement("div");
+  container.innerHTML = htmlString;
+  const listItems = container.querySelectorAll("li");
+  return Array.from(listItems).map((li) => li.innerHTML);
+};
 
 function RichTextEditor({ index, onRichTextEditorChange }) {
   const [value, setValue] = useState();
-  const { resumeInfo, setResumeInfo } = useContext(ResumeInfoContext);
+
   const [loading, setLoading] = useState(false);
+  const { experienceList } = useExperience();
+  const {
+    getAIExperience,
+    getAIExperienceError,
+    regenerateExperience,
+    regenerateExperienceError,
+  } = useResumeApi();
+  const [bullets, setBullets] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    resumeInfo?.experience && setValue(resumeInfo?.experience[index].workSummary);
+    experienceList && setValue(experienceList[index]?.workSummary);
   }, []);
+
+  const handleSaveSummary = () => {
+    const htmlSummary = `<ul>${bullets
+      .map((b) => `<li>${b}</li>`)
+      .join("")}</ul>`;
+    setValue(htmlSummary);
+    onRichTextEditorChange({ target: { value: htmlSummary } });
+    setShowModal(false);
+  };
+
+  const checkValidations = () => {
+    for (const { field, message } of validation_checks) {
+      if (!experienceList[index]?.[field]) {
+        return { validation: false, message };
+      }
+    }
+
+    // Special case for endDate / currentlyWorking
+    const current = experienceList[index];
+    if (!current?.endDate && current?.currentlyWorking === false) {
+      toast.error("Please add end date or currently working first.");
+      setLoading(false);
+      return {
+        validation: false,
+        message: "Please add end date or currently working first.",
+      };
+    }
+
+    return { validation: true, message: "" };
+  };
 
   const generateSummaryWithAi = async () => {
     setLoading(true);
-    if (!resumeInfo.experience[index].title) {
-      toast("Please Add Position Title");
+    // console.log("index", index);
+    // console.log("experienceList", experienceList[index]);
+
+    const { validation, message } = checkValidations();
+    if (!validation) {
+      toast.error(message);
       setLoading(false);
       return;
     }
-    const prompt = PROMPT.replace(
-      "{positionTitle}",
-      resumeInfo.experience[index].title
-    );
-    console.log(prompt);
-    const result = await AIChatSession.sendMessage(prompt);
-    const resp = JSON.parse(result.response.text());
-    console.log(resp);
-    setValue(resp['resume_points'][0]);
-    onRichTextEditorChange({ target: { value: resp['resume_points'][0] } });
-
-    setLoading(false);
+    const current = experienceList[index];
+    const data = {
+      experience_str: `Position: ${current?.title}, Company: ${
+        current?.companyName
+      }, Start Date: ${current?.startDate}, End Date: ${
+        current?.endDate || "Currently Working"
+      }`,
+    };
+    const res = await getAIExperience(data);
+    if (res.data) {
+      // console.log(res.data);
+      setValue(res.data);
+      // const resp = JSON.parse(res.data);
+      const bulletsFromAI = parseHtmlToBulletPoints(res.data);
+      setBullets(bulletsFromAI);
+      setShowModal(true);
+      setLoading(false);
+      // onRichTextEditorChange({ target: { value: res.data } });
+      toast.success("Summary generated successfully");
+    }
+    if(getAIExperienceError) {
+      setLoading(false);
+      toast.error("Something went wrong while generating summary");
+    }
+    
   };
-  
+
+  const regenerateSummaryWithAi = async () => {
+    setLoading(true);
+    const exper_str = extractExperienceText(value);
+    const data = {
+      experience_str: exper_str
+    };
+    const res = await regenerateExperience(data);
+
+    if (res.data) {
+      // console.log(res.data);
+      setValue(res.data);
+      const bulletsFromAI = parseHtmlToBulletPoints(res.data);
+      setBullets(bulletsFromAI);
+      setShowModal(true);
+      setLoading(false);
+      toast.success("Summary generated successfully");
+    }
+
+    if (regenerateExperienceError) {
+      setLoading(false);
+      toast.error("Something went wrong while generating summary");
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between my-2">
@@ -90,6 +182,20 @@ function RichTextEditor({ index, onRichTextEditorChange }) {
           </Toolbar>
         </Editor>
       </EditorProvider>
+      {/* Modal goes here */}
+      <EditableBulletsModal
+        open={showModal}
+        bullets={bullets}
+        onBulletChange={(i, val) =>
+          setBullets((prev) => prev.map((b, idx) => (idx === i ? val : b)))
+        }
+        onRemove={(i) =>
+          setBullets((prev) => prev.filter((_, idx) => idx !== i))
+        }
+        onRegenerate={regenerateSummaryWithAi}
+        onClose={() => setShowModal(false)}
+        onSave={handleSaveSummary}
+      />
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { Textarea } from "@/components/ui/textarea";
-import { ResumeInfoContext } from "@/context/ResumeInfoContext";
 import React, { useContext, useEffect, useState } from "react";
 import GlobalApi from "../../../../../services/GlobalApi";
 import { useParams } from "react-router-dom";
@@ -7,60 +6,68 @@ import { Button } from "@/components/ui/button";
 import { Brain, LoaderCircle } from "lucide-react";
 import { AIChatSession } from "../../../../../services/AIModel";
 import { toast } from "sonner";
-
-const PROMPT =
-  "Job Title: {jobTitle}, based on the job title, provide a sample summary for a resume in JSON format with the following fields: summary and experience_level. Provide sample summaries with experience Fresher(0-1 years), Mid-level(2-5 years) and High-level(5+ years) experience.";
+import { useResumeApi } from "../../../../hooks/useResumeApi";
+import useSummary from "@/hooks/useSummary";
+import usePersonalInfo from "@/hooks/usePersonalInfo";
 
 function Summary({ enableNext }) {
   const params = useParams();
-  const { resumeInfo, setResumeInfo } = useContext(ResumeInfoContext);
+  const { resume_summary, updateSummaryContext } = useSummary();
+  const { personalInfo } = usePersonalInfo();
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState("");
   const [aiGeneratedSummary, setAiGeneratedSummary] = useState();
+  const { getAISummary, updateSummary } = useResumeApi();
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    setSummary(resumeInfo?.summary);
-  }, []);
+    if (
+      !hasInitialized &&
+      resume_summary &&
+      Object.keys(resume_summary).length > 0
+    ) {
+      setSummary(resume_summary?.summary);
+      setHasInitialized(true);
+    }
+  }, [resume_summary, hasInitialized]);
 
   useEffect(() => {
-    enableNext(false);
-    summary &&
-      setResumeInfo({
-        ...resumeInfo,
-        summary: summary,
-      });
+    summary && updateSummaryContext("summary", summary);
   }, [summary]);
 
   const generateSummaryWithAI = async () => {
     setLoading(true);
-    const prompt = PROMPT.replace("{jobTitle}", resumeInfo?.jobTitle);
-    const result = await AIChatSession.sendMessage(PROMPT);
-    console.log(result.response)
-    setAiGeneratedSummary(JSON.parse(result.response.text()));
+    if (personalInfo?.jobTitle) {
+      // console.log(
+      //   "Generating summary with AI for job title: ",
+      //   personalInfo?.jobTitle
+      // );
+      const res = await getAISummary(personalInfo?.jobTitle, summary);
+      console.log(res.data);
+      if (res.data) {
+        setAiGeneratedSummary(res.data);
+      }
+    }
     setLoading(false);
   };
 
-  const onSave = (e) => {
+  const onSave = async(e) => {
     e.preventDefault();
     setLoading(true);
     const data = {
-      data: {
-        summary: summary,
-      },
+      summary: summary,
+      resumeId: params.resumeId,
+      summaryId: resume_summary?.id,
     };
-    GlobalApi.UpdateResumeDetail(params?.resumeId, data).then(
-      (res) => {
-        // console.log(res);
-        enableNext(true);
-        setLoading(false);
-        toast.success("Summary saved successfully");
-      },
-      (error) => {
-        // console.log(error);
-        setLoading(false);
-        toast.error("Error Occured. Please try again later");
-      }
-    );
+    const res = await updateSummary(data);
+    if(res.data){
+      console.log(res.data);
+      toast.success("Summary updated successfully");
+      enableNext(true);
+    }else{
+      toast.error("Failed to update summary");
+    }
+    setLoading(false);
   };
 
   return (
@@ -100,14 +107,29 @@ function Summary({ enableNext }) {
       {aiGeneratedSummary && (
         <div>
           <h2 className="font-bold text-lg">Suggestion</h2>
-          {aiGeneratedSummary?.map((item, index) => (
-            <div key={index} className="p-5 shadow-lg my-4 rounded-lg cursor-pointer" onClick={()=>setSummary(item?.summary)}>
-              <h2 className="font-bold my-1 text-primary">
-                Level: {item?.experience_level}
-              </h2>
-              <p>{item?.summary}</p>
-            </div>
-          ))}
+          {aiGeneratedSummary &&
+            typeof aiGeneratedSummary === "object" &&
+            Object.entries(aiGeneratedSummary).map(([level, item], index) => {
+              // Format the key like "mid-level" -> "Mid Level"
+              const formattedLevel = level
+                .replace(/_/g, " ") // replace underscores with space if any
+                .split("-") // split on dashes
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(" "); // join back with space
+
+              return (
+                <div
+                  key={index}
+                  className="p-5 shadow-lg my-4 rounded-lg cursor-pointer"
+                  onClick={() => setSummary(item?.summary)}
+                >
+                  <h2 className="font-bold my-1 text-primary">
+                    Level: {item?.experience_level || formattedLevel}
+                  </h2>
+                  <p>{item?.summary}</p>
+                </div>
+              );
+            })}
         </div>
       )}
     </div>

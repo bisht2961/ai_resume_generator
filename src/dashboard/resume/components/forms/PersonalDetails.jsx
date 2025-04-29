@@ -1,50 +1,62 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ResumeInfoContext } from "@/context/ResumeInfoContext";
 import { LoaderCircle } from "lucide-react";
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import GlobalApi from "../../../../../services/GlobalApi";
 import { toast } from "sonner";
+import { useResumeApi } from "../../../../hooks/useResumeApi";
+import usePersonalInfo from "../../../../hooks/usePersonalInfo";
+
 
 function PersonalDetails({ enableNext }) {
   const params = useParams();
-  const { resumeInfo, setResumeInfo } = useContext(ResumeInfoContext);
+  const { personalInfo, updatePersonalInfoContext } = usePersonalInfo();
   const [formData, setFormData] = useState({});
-  const [loading, setLoading] = useState(false);
+  const { updatePersonalInfo, updatePersonalInfoLoading } = useResumeApi();
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!hasInitialized && personalInfo && Object.keys(personalInfo).length > 0) {
+      setFormData(personalInfo);
+      setHasInitialized(true); 
+    }
+  }, [personalInfo, hasInitialized]);
 
   const handleInputChange = (e) => {
     enableNext(false);
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [name]: value,
-    });
-    setResumeInfo({
-      ...resumeInfo,
-      [name]: value,
-    });
+    }));
+    updatePersonalInfoContext(name,value);
   };
 
-  const onSave = (e) => {
-    setLoading(true);
+  const onSave = async (e) => {
     e.preventDefault();
     const data = {
-      data: formData,
+      ...formData,
+      resumeId: parseInt(params.resumeId),
+      userId: personalInfo?.personalInfoId
+        ? parseInt(personalInfo?.personalInfoId)
+        : null,
     };
-    GlobalApi.UpdateResumeDetail(params?.resumeId, data).then(
-      (res) => {
-        console.log(res);
+
+    try {
+      // console.log("Data to be sent: ", data);
+      const res = await updatePersonalInfo(data);
+      if (res.data) {
+        toast.success("Personal Info Updated Successfully");
         enableNext(true);
-        setLoading(false);
-        toast.success("Personal Details Saved Successfully");
-      },
-      (error) => {
-        console.log(error);
-        setLoading(false);
-        toast.error('Error Occured. Please try again later');
+      } else {
+        toast.error("Error Occurred. Please try again later");
+        enableNext(false);
       }
-    );
+    } catch (err) {
+      // console.error(err);
+      toast.error("Error Occurred. Please try again later");
+      enableNext(false);
+    }
   };
 
   return (
@@ -55,76 +67,68 @@ function PersonalDetails({ enableNext }) {
       <form onSubmit={onSave}>
         <div className="grid grid-cols-2 mt-5 gap-3">
           <div>
-            <label htmlFor="" className="text-sm">
-              First Name
-            </label>
+            <label className="text-sm">First Name</label>
             <Input
               name="firstName"
-              defaultValue={resumeInfo?.firstName}
+              defaultValue={personalInfo?.firstName}
               required
               onChange={handleInputChange}
             />
           </div>
           <div>
-            <label htmlFor="" className="text-sm">
-              Last Name
-            </label>
+            <label className="text-sm">Last Name</label>
             <Input
               name="lastName"
-              defaultValue={resumeInfo?.lastName}
+              defaultValue={personalInfo?.lastName}
               required
               onChange={handleInputChange}
             />
           </div>
           <div className="col-span-2">
-            <label htmlFor="" className="text-sm">
-              Job Title
-            </label>
+            <label className="text-sm">Job Title</label>
             <Input
               name="jobTitle"
-              defaultValue={resumeInfo?.jobTitle}
+              defaultValue={personalInfo?.jobTitle}
               required
               onChange={handleInputChange}
             />
           </div>
           <div className="col-span-2">
-            <label htmlFor="" className="text-sm">
-              Address
-            </label>
+            <label className="text-sm">Address</label>
             <Input
               name="address"
-              defaultValue={resumeInfo?.address}
+              defaultValue={personalInfo?.address}
               required
               onChange={handleInputChange}
             />
           </div>
           <div>
-            <label htmlFor="" className="text-sm">
-              Phone
-            </label>
+            <label className="text-sm">Phone</label>
             <Input
               name="phone"
-              defaultValue={resumeInfo?.phone}
+              defaultValue={personalInfo?.phone}
               required
               onChange={handleInputChange}
             />
           </div>
           <div>
-            <label htmlFor="" className="text-sm">
-              Email
-            </label>
+            <label className="text-sm">Email</label>
             <Input
               name="email"
-              defaultValue={resumeInfo?.email}
+              defaultValue={personalInfo?.email}
               required
               onChange={handleInputChange}
             />
           </div>
         </div>
+
         <div className="mt-3 flex justify-end">
-          <Button type="submit" disabled={loading}>
-            {" "}
-            {loading ? <LoaderCircle className="animate-spin" /> : "Save"}
+          <Button type="submit" disabled={updatePersonalInfoLoading}>
+            {updatePersonalInfoLoading ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              "Save"
+            )}
           </Button>
         </div>
       </form>

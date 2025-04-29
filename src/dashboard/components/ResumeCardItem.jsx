@@ -3,8 +3,6 @@ import {
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@radix-ui/react-dropdown-menu";
 import {
   AlertDialog,
@@ -15,13 +13,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 import { Loader2Icon, MoreVertical, Notebook } from "lucide-react";
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import GlobalApi from "../../../services/GlobalApi";
+import { useResumeApi } from "../../hooks/useResumeApi";
 import { toast } from "sonner";
 
 function ResumeCardItem({ resume, refershData }) {
@@ -29,25 +26,27 @@ function ResumeCardItem({ resume, refershData }) {
   const [openAlert, setOpenAlert] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const onDelete = () => {
+  const { deleteResume, deleteResumeError } = useResumeApi();
+
+ 
+  const onDelete = async() => {
     setLoading(true);
-    GlobalApi.DeleteResumeById(resume.documentId).then((res) => {
+    const res = await deleteResume(resume.id);
+    if(res.data){
       setLoading(false);
-      console.log(res);
-      toast.success("Resume deleted successfully");
       setOpenAlert(false);
       refershData();
-    }).catch((err) => {
-      toast.error("Failed to delete resume");
-      console.log(err);
-      setOpenAlert(false);
+      toast.success("Resume deleted successfully");
+    }
+    if(deleteResumeError){
       setLoading(false);
-    });
+      setOpenAlert(false);
+      toast.error("Error deleting resume");
+    }
   }
-
   return (
     <div className="">
-      <Link to={"/dashboard/resume/" + resume.documentId + "/edit"}>
+      <Link to={"/dashboard/resume/" + resume.id + "/edit"}>
         <div
           className="p-14 bg-gradient-to-b from-pink-100 via-purple-100 to-blue-100 bg-secondary flex items-center justify-center h-[280px] border
         rounded-lg hover:scale-105 transition-all hover:shadow-md shadow-primary"
@@ -62,7 +61,7 @@ function ResumeCardItem({ resume, refershData }) {
           background: resume?.themeColor,
         }}
       >
-        <h2 className="text-white text-center my-1">{resume.title}</h2>
+        <h2 className="text-black text-center my-1">{resume.title}</h2>
         <DropdownMenu>
           <DropdownMenuTrigger>
             <MoreVertical className="h-4 w-4 cursor-pointer" />
@@ -71,7 +70,7 @@ function ResumeCardItem({ resume, refershData }) {
             <DropdownMenuCheckboxItem
               className=" w-50 py-2 px-1" 
               onClick={() =>
-                navigation("/dashboard/resume/" + resume.documentId + "/edit")
+                navigation("/dashboard/resume/" + resume.id + "/edit")
               }
             >
               Edit
@@ -80,7 +79,7 @@ function ResumeCardItem({ resume, refershData }) {
               className="py-2 px-1"
               onClick={() =>
                 navigation(
-                  "/resume-download-share/" + resume.documentId + "/view"
+                  "/resume-download-share/" + resume.id + "/view"
                 )
               }
             >

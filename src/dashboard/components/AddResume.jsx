@@ -6,14 +6,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input"
-import {v4 as uuidv4} from 'uuid'
-import GlobalApi from "./../../../services/GlobalApi";
+import { useResumeApi } from "../../hooks/useResumeApi";
 import { useUser } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const AddResume = () => {
 
@@ -22,26 +21,29 @@ const AddResume = () => {
   const {user} = useUser();
   const [loading, setLoading] = useState(false);
   const navigation = useNavigate();
-  const onCreate=()=>{
+  const {createUpdateResume,updateResumeError} = useResumeApi()
+
+  const onCreate = async()=>{
     setLoading(true);
-    const uuid = uuidv4();
+    const emailAddress = user?.primaryEmailAddress.emailAddress.split('@')[0]
     const data = {
-      data:{
-        title:resumeTitle,
-        resumeId:uuid,
-        userEmail: user?.primaryEmailAddress.emailAddress,
-        userName: user?.fullName
-      }
+      title: resumeTitle,
+      userEmail: emailAddress,
     }
-    GlobalApi.CreateNewResume(data).then(res=>{
-      const docId = res.data.data.documentId
-      if(res){
-        navigation("/dashboard/resume/"+docId+"/edit")
-        setLoading(false);
-      }
-    },(error)=>{
+    const res = await createUpdateResume(data);
+    if(res.data){
+      // console.log(res.data)
       setLoading(false);
-    });
+      setOpenDialog(false);
+      const resumeId = res.data.data[0].id;
+      navigation(`/dashboard/resume/${resumeId}/edit`)
+    }
+    if(updateResumeError){
+      setLoading(false);
+      setOpenDialog(false);
+      toast.error("Error creating resume")
+    }
+    
   }
 
   
@@ -61,7 +63,7 @@ const AddResume = () => {
           <DialogHeader>
             <DialogTitle>Create New Resume</DialogTitle>
             <DialogDescription>
-              <p>Add title for new resume</p>
+              <span>Add title for new resume</span>
               <Input className="my-2" placeholder="Ex.Full Stack Resume" onChange={(e)=>setResumeTitle(e.target.value)} />
             </DialogDescription>
             <div className="flex justify-end gap-5">

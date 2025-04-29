@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Popover,
   PopoverContent,
@@ -7,9 +7,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Circle } from "lucide-react";
 import { ResumeInfoContext } from "@/context/ResumeInfoContext";
-import GlobalApi from "../../../../services/GlobalApi";
-import { toast } from "sonner";
 import { useParams } from "react-router-dom";
+import { useResumeApi } from "@/hooks/useResumeApi";
 
 function ThemeColor() {
   const colors = [
@@ -36,28 +35,33 @@ function ThemeColor() {
   ];
   const {resumeInfo, setResumeInfo} = useContext(ResumeInfoContext);
   const [themeColor, setThemeColor] = useState();
-  const {resumeId} = useParams()
+  const {createUpdateResume} = useResumeApi();
+  const [open, setOpen] = useState(false); 
+  
 
-  const onColorSelect = (color)=>{
+  const onColorSelect = async(color)=>{
     setThemeColor(color);
-    setResumeInfo({...resumeInfo, themeColor: color});
-    const data = {
-      data:{
-        themeColor: color
-      }
+    const data = {...resumeInfo.resume, themeColor: color};
+    console.log(data)
+    const res = await createUpdateResume(data);
+    if(res.data){
+      console.log(res.data)
+      setResumeInfo({...resumeInfo, resume:{...resumeInfo.resume, themeColor: color}});
     }
-    GlobalApi.updateResume(resumeId, data).then((res)=>{
-      console.log(res);
-      toast.success("Theme color updated successfully");
-    },
-    (error)=>{
-      console.log(error);
-      toast.error("Failed to update theme color");
-    });
+    setOpen(false);
+
   }
 
+  useEffect(()=>{
+    if(resumeInfo?.resume?.themeColor){
+      setThemeColor(resumeInfo.resume.themeColor)
+    }else{
+      setThemeColor(colors[0])
+    }
+  },[])
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="flex gap-2">
           {" "}

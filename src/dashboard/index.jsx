@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import AddResume from './components/addResume'
-import GlobalApi from './../../services/GlobalApi';
 import { useUser } from '@clerk/clerk-react';
 import ResumeCardItem from './components/ResumeCardItem';
+import {useResumeApi}  from '../hooks/useResumeApi';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
 
   const {user} = useUser();
   const [resumeList,setResumeList] = useState([]);
+  const {getAllResumes,getAllResumesError} = useResumeApi();
 
   useEffect(() => {
     user&&getResumesList()
@@ -16,13 +18,16 @@ const Dashboard = () => {
   /**
     Get the list of resumes created by the user
    */
-  const getResumesList = ()=> {
-    GlobalApi.GetUserResume(user?.primaryEmailAddress.emailAddress).then(res=>{
-      
-     setResumeList(res.data.data);
-    },(error)=>{
-      console.log(error);
-    });
+  const getResumesList = async()=> {
+    const emailAddress = user?.primaryEmailAddress.emailAddress.split('@')[0];
+    const res = await getAllResumes(emailAddress);
+    if(res.data){
+      // console.log(res.data.data);
+      setResumeList(res.data.data);
+    }
+    if(getAllResumesError){
+      toast.error("Error fetching resumes list")
+    }
   }
 
   return (
